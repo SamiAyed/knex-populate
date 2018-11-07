@@ -3,6 +3,7 @@ var KnexQuery = function(knex, main_table) {
   this.main_table = main_table;
   this.child_tables = [];
   this.fks = [];
+  this.pks = [];
   this.aliases = [];
   this.query = {};
   this.limit = 0;
@@ -18,9 +19,10 @@ KnexQuery.prototype.findById = function (id) {
   return this;
 };
 
-KnexQuery.prototype.populate = function (child_table, fk, alias) {
+KnexQuery.prototype.populate = function (child_table, fk, pk, alias) {
   this.child_tables.push(child_table);
   this.fks.push(fk);
+  this.pks.push(pk || 'id');
   alias ? this.aliases.push(alias) : this.aliases.push(child_table);
   return this;
 };
@@ -75,9 +77,10 @@ function blah(query) {
       let [ main_table_results, ...othertables ] = data;
       main_table_results.forEach((mtres, mainindex) => {
         this.fks.map((fk, index) => {
+          const pk = this.pks[index]
           mtres[this.aliases[index]] = [];
           othertables[index].map(item => {
-            if(item.id === mtres[fk] || item[fk] === mtres.id) {
+            if(item[pk] === mtres[fk] || item[fk] === mtres[pk]) {
               mtres[this.aliases[index]].push(item);
             }
           });

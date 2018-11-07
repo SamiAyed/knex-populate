@@ -19,10 +19,10 @@ KnexQuery.prototype.findById = function (id) {
   return this;
 };
 
-KnexQuery.prototype.populate = function (child_table, fk, pk, alias) {
+KnexQuery.prototype.populate = function (child_table, fk, alias, pk='id') {
   this.child_tables.push(child_table);
   this.fks.push(fk);
-  this.pks.push(pk || 'id');
+  this.pks.push(pk);
   alias ? this.aliases.push(alias) : this.aliases.push(child_table);
   return this;
 };

@@ -1,4 +1,4 @@
-var KnexQuery = function(knex, main_table) {
+var KnexQuery = function (knex, main_table) {
   this.knex = knex;
   this.main_table = main_table;
   this.child_tables = [];
@@ -19,7 +19,7 @@ KnexQuery.prototype.findById = function (id) {
   return this;
 };
 
-KnexQuery.prototype.populate = function (child_table, fk, alias, pk='id') {
+KnexQuery.prototype.populate = function (child_table, fk, alias, pk = 'id') {
   this.child_tables.push(child_table);
   this.fks.push(fk);
   this.pks.push(pk);
@@ -33,7 +33,7 @@ KnexQuery.prototype.limitTo = function (num) {
 };
 
 KnexQuery.prototype.orderBy = function (column, order) {
-  if(!column || !order) {
+  if (!column || !order) {
     throw new Error('orderBy requires two arguments: the column you want to order by and either "asc" or "desc", respectively');
   }
   this.obcol = column;
@@ -46,41 +46,69 @@ KnexQuery.prototype.exec = function () {
   let thequery = this.knex(this.main_table).select();
 
 
-  if(this.limit > 0) thequery = thequery.limit(this.limit);
-  if(this.obcol) thequery = thequery.orderBy(this.obcol, this.oborder);
+  if (this.limit > 0) thequery = thequery.limit(this.limit);
+  if (this.obcol) thequery = thequery.orderBy(this.obcol, this.oborder);
 
-  if(Object.keys(this.query).length < 1) {
+  if (Object.keys(this.query).length < 1) {
     return blah.call(this, thequery);
   } else {
     var keys = Array.from(Object.keys(this.query));
-    var vals = keys.map(function(key) {
-        return self.query[key];
+    var vals = keys.map(function (key) {
+      return self.query[key];
     });
     keys.map((item, index) => {
       thequery = thequery.where(keys[index], vals[index]);
     });
 
-    if(this.limit > 0) thequery = thequery.limit(this.limit);
+    if (this.limit > 0) thequery = thequery.limit(this.limit);
 
     return blah.call(this, thequery);
   }
 };
 
 function blah(query) {
-  var childQueries = this.child_tables.map(table => this.knex(table).select());
+  const deep_populate_tables = {}
+  var childQueries = this.child_tables.map((table, i) => {
+    if (table.split('.') && table.split('.')[1]) {
+      const table_name = table.split('.')[1]
+      const parent_table_name = table.split('.')[0]
+      const index = this.child_tables.indexOf(parent_table_name)
+      deep_populate_tables[index] = this.aliases[i]
+      return this.knex(table_name).select()
+    }
+    return this.knex(table).select()
+  });
   return Promise
     .all([
       query,
       ...childQueries
     ])
     .then(data => {
-      let [ main_table_results, ...othertables ] = data;
+      let [main_table_results, ...othertables] = data;
+
       main_table_results.forEach((mtres, mainindex) => {
         this.fks.map((fk, index) => {
+          if (Object.values(deep_populate_tables).indexOf(this.aliases[index]) > -1) {
+            return
+          }
+          const isDeep = Object.keys(deep_populate_tables).indexOf(index.toString()) > -1
           const pk = this.pks[index]
           mtres[this.aliases[index]] = [];
           othertables[index].map(item => {
-            if(item[pk] === mtres[fk] || item[fk] === mtres[pk]) {
+            if (item[pk] === mtres[fk] || item[fk] === mtres[pk]) {
+              if (isDeep) {
+                const child_index = index + 1
+                const child_alias = this.aliases[child_index]
+                const child_pk = this.pks[child_index]
+                const child_fk = this.fks[child_index]
+                item[child_alias] = []
+                othertables[child_index].forEach(child_item => {
+                  if (child_item[child_pk] === item[child_fk] || child_item[fk] === item[child_fk]) {
+                    item[child_alias].push(child_item);
+                  }
+                })
+              }
+
               mtres[this.aliases[index]].push(item);
             }
           });
@@ -91,8 +119,8 @@ function blah(query) {
     });
 };
 
-module.exports = function(knex, main_table) {
-  if(!main_table || typeof knex !== 'function') {
+module.exports = function (knex, main_table) {
+  if (!main_table || typeof knex !== 'function') {
     throw new Error('The initial instantiation requires two arguments: the instance of knex and the table which you are querying');
   }
   return new KnexQuery(knex, main_table);
